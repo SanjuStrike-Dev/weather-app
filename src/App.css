@@ -1397,7 +1397,7 @@ body {
 .temp-range > div {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.3rem;
 }
 
 .temp-label {
