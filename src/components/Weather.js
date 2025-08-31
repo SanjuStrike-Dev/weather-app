@@ -1,9 +1,16 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { WiHumidity, WiStrongWind, WiBarometer, WiThermometer } from 'react-icons/wi';
 
-function Weather({ data }) {
+// Utility function to convert UTC time to location's local time
+const getLocalTime = (timezoneOffset) => {
+  const now = new Date();
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const localTime = new Date(utcTime + (timezoneOffset * 1000));
+  return localTime;
+};
+
+function Weather({ data, lastUpdate, onManualRefresh, loading }) {
   if (!data || !data.main || !data.weather) {
     return <p>No weather data available</p>;
   }
@@ -16,6 +23,9 @@ function Weather({ data }) {
   const windSpeed = Math.round(data.wind?.speed * 3.6); // Convert m/s to km/h
   const pressure = data.main.pressure;
   const visibility = data.visibility ? Math.round(data.visibility / 1000) : null; // Convert to km
+
+  // Get local time for the location using timezone offset from API
+  const localTime = data.timezone ? getLocalTime(data.timezone) : new Date();
 
   const getWeatherIcon = (iconCode) => {
     const iconMap = {
@@ -131,7 +141,12 @@ function Weather({ data }) {
             animate={{ opacity: 1 }}
             transition={{ delay: 1.0, duration: 0.5 }}
           >
-            {format(new Date(), 'EEEE, MMMM do')} • {format(new Date(), 'h:mm a')}
+            {format(localTime, 'EEEE, MMMM do')} • {format(localTime, 'h:mm a')}
+            {data.timezone && (
+              <span className="timezone-info">
+                {' '}• Local time
+              </span>
+            )}
           </motion.p>
         </motion.div>
         <motion.div 
@@ -244,6 +259,16 @@ function Weather({ data }) {
           </div>
         )}
       </div> */}
+
+      {/* Refresh Note */}
+      <motion.div 
+        className="refresh-note"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.5 }}
+      >
+        *Last updated: {lastUpdate ? getLocalTime(data.timezone).toLocaleTimeString() : 'Never'}
+      </motion.div>
     </motion.div>
   );
 }

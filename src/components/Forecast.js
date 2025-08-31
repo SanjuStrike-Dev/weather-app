@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format, parseISO, isToday, isAfter, startOfDay } from 'date-fns';
 
+// Utility function to convert UTC time to location's local time
+const getLocalTimeFromUTC = (utcTimestamp, timezoneOffset) => {
+  if (!timezoneOffset) return new Date(utcTimestamp * 1000);
+  const utcTime = new Date(utcTimestamp * 1000);
+  const localTime = new Date(utcTime.getTime() + (timezoneOffset * 1000));
+  return localTime;
+};
+
 function Forecast({ data }) {
   const [selectedDay, setSelectedDay] = useState(0);
 
@@ -9,7 +17,11 @@ function Forecast({ data }) {
 
   // Group forecast data by day
   const dailyForecasts = data.list.reduce((acc, item) => {
-    const date = format(parseISO(item.dt_txt), 'yyyy-MM-dd');
+    // Use timezone-adjusted date if available
+    const itemDate = data.city?.timezone 
+      ? getLocalTimeFromUTC(item.dt, data.city.timezone)
+      : parseISO(item.dt_txt);
+    const date = format(itemDate, 'yyyy-MM-dd');
     if (!acc[date]) {
       acc[date] = [];
     }
@@ -40,11 +52,17 @@ function Forecast({ data }) {
     );
     const weatherIcon = items.find(item => item.weather[0].main === dominantWeather)?.weather[0].icon;
 
+    // Use timezone-adjusted date for today check
+    const dateObj = parseISO(date);
+    const isTodayInLocation = data.city?.timezone 
+      ? isToday(getLocalTimeFromUTC(dateObj.getTime() / 1000, data.city.timezone))
+      : isToday(dateObj);
+
     return {
       date,
-      dayName: format(parseISO(date), 'EEE'),
-      fullDate: format(parseISO(date), 'MMM dd'),
-      isToday: isToday(parseISO(date)),
+      dayName: format(dateObj, 'EEE'),
+      fullDate: format(dateObj, 'MMM dd'),
+      isToday: isTodayInLocation,
       avgTemp,
       minTemp,
       maxTemp,
@@ -70,8 +88,11 @@ function Forecast({ data }) {
   // Filter out today and only show future days
   const upcomingDays = displayData.filter(day => {
     const dayDate = parseISO(day.date);
-    const today = startOfDay(new Date());
-    return isAfter(dayDate, today);
+    // Use timezone-adjusted today if available
+    const todayInLocation = data.city?.timezone 
+      ? startOfDay(getLocalTimeFromUTC(Date.now() / 1000, data.city.timezone))
+      : startOfDay(new Date());
+    return isAfter(dayDate, todayInLocation);
   });
 
   // Get all hourly data for today from API

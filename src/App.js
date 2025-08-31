@@ -18,10 +18,14 @@ function App() {
   const [weatherClass, setWeatherClass] = useState('default-bg');
   const [weatherAnimation, setWeatherAnimation] = useState(null);
   const [alerts, setAlerts] = useState([]);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(true); // Always on by default
+  const [currentQuery, setCurrentQuery] = useState(null);
+  const [currentCoords, setCurrentCoords] = useState(null);
 
-  const fetchWeatherData = async (query, lat = null, lon = null) => {
-    // Only set loading if not already loading (for location requests)
-    if (!loading) {
+  const fetchWeatherData = async (query, lat = null, lon = null, isAutoRefresh = false) => {
+    // Only set loading if not already loading (for location requests) and not auto-refresh
+    if (!loading && !isAutoRefresh) {
       setLoading(true);
     }
     setError(null);
@@ -39,6 +43,13 @@ function App() {
         const alertsData = await weatherService.getWeatherAlerts(`lat=${lat}&lon=${lon}`);
         setAlerts(alertsData);
       }
+
+      // Update last update time
+      setLastUpdate(new Date());
+
+      // Store current query and coordinates for auto-refresh
+      setCurrentQuery(query);
+      setCurrentCoords({ lat, lon });
 
       // Determine weather class and animation
       const main = weatherData.weather?.[0]?.main?.toLowerCase();
@@ -68,7 +79,9 @@ function App() {
       }
     } catch (error) {
       console.error('Error fetching data: ', error);
-      setError(error.message);
+      if (!isAutoRefresh) {
+        setError(error.message);
+      }
     }
     setLoading(false);
   };
@@ -83,7 +96,7 @@ function App() {
         },
         (error) => {
           console.log('Geolocation error:', error);
-          setError('Please enter a city name to get weather information');
+          setError('location-not-found');
         },
         {
           enableHighAccuracy: true,
@@ -92,9 +105,24 @@ function App() {
         }
       );
     } else {
-      setError('Please enter a city name to get weather information');
+      setError('location-not-found');
     }
   }, []);
+
+  // Auto-refresh weather data every minute
+  useEffect(() => {
+    if (!autoRefresh || !currentQuery) return;
+
+    const interval = setInterval(() => {
+      if (currentCoords?.lat && currentCoords?.lon) {
+        fetchWeatherData(currentQuery, currentCoords.lat, currentCoords.lon, true);
+      } else {
+        fetchWeatherData(currentQuery, null, null, true);
+      }
+    }, 60000); // 60 seconds = 1 minute
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, currentQuery, currentCoords]);
 
   const handleSearch = (searchTerm, lat = null, lon = null) => {
     setCity(searchTerm);
@@ -120,7 +148,7 @@ function App() {
         (error) => {
           console.log('Location button error:', error);
           setLoading(false);
-          setError('Unable to get your location. Please search for a city.');
+          setError('location-not-found');
         },
         {
           enableHighAccuracy: true,
@@ -130,9 +158,21 @@ function App() {
       );
     } else {
       setLoading(false);
-      setError('Geolocation is not supported by your browser.');
+      setError('location-not-found');
     }
   };
+
+  const handleManualRefresh = () => {
+    if (currentQuery) {
+      if (currentCoords?.lat && currentCoords?.lon) {
+        fetchWeatherData(currentQuery, currentCoords.lat, currentCoords.lon);
+      } else {
+        fetchWeatherData(currentQuery);
+      }
+    }
+  };
+
+
 
   return (
     <div className={`App ${weatherClass}`}>
@@ -157,7 +197,7 @@ function App() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.8, type: "spring", stiffness: 100 }}
           >
-            <span>Weather Forecast</span>
+            <span>Weather&nbsp;Forecast</span>
           </motion.h1>
           
           <motion.div
@@ -197,30 +237,65 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="city-not-found-container"
+                className={error === 'location-not-found' ? "location-not-found-container" : "city-not-found-container"}
               >
-                <div className="city-not-found-icon">🌍</div>
-                <h2 className="city-not-found-title">City Not Found</h2>
-                <p className="city-not-found-message">
-                  {error.includes('404') || error.includes('not found') 
-                    ? "We couldn't find the city you're looking for. Please check the spelling and try again."
-                    : error
+                <div className={error === 'location-not-found' ? "location-not-found-icon" : "city-not-found-icon"}>
+                  {error === 'location-not-found' ? '📍' : '🌍'}
+                </div>
+                <h2 className={error === 'location-not-found' ? "location-not-found-title" : "city-not-found-title"}>
+                  {error === 'location-not-found' ? 'Location Not Found' : 'City Not Found'}
+                </h2>
+                <p className={error === 'location-not-found' ? "location-not-found-message" : "city-not-found-message"}>
+                  {error === 'location-not-found' 
+                    ? "We couldn't access your location. Please enable location services or search for a city manually."
+                    : error.includes('404') || error.includes('not found') 
+                      ? "We couldn't find the city you're looking for. Please check the spelling and try again."
+                      : error
                   }
                 </p>
                 
-                <div className="city-not-found-actions">
-                  <button 
-                    className="city-not-found-button"
-                    onClick={() => {
-                      handleLocationClick();
-                      setCity('');
-                      if (window.clearSearchInput) {
-                        window.clearSearchInput();
-                      }
-                    }}
-                  >
-                    📍 Use My Location
-                  </button>
+                <div className={error === 'location-not-found' ? "location-not-found-actions" : "city-not-found-actions"}>
+                  {error === 'location-not-found' ? (
+                    <>
+                      <button 
+                        className="location-not-found-button primary"
+                        onClick={() => {
+                          handleLocationClick();
+                          setCity('');
+                          if (window.clearSearchInput) {
+                            window.clearSearchInput();
+                          }
+                        }}
+                      >
+                        🔄 Try Again
+                      </button>
+                      <button 
+                        className="location-not-found-button secondary"
+                        onClick={() => {
+                          setError(null);
+                          setCity('');
+                          if (window.clearSearchInput) {
+                            window.clearSearchInput();
+                          }
+                        }}
+                      >
+                        🔍 Search City
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      className="city-not-found-button"
+                      onClick={() => {
+                        handleLocationClick();
+                        setCity('');
+                        if (window.clearSearchInput) {
+                          window.clearSearchInput();
+                        }
+                      }}
+                    >
+                      📍 Use My Location
+                    </button>
+                  )}
                 </div>
               </motion.div>
             ) : weatherData ? (
@@ -254,6 +329,8 @@ function App() {
                     ))}
                   </motion.div>
                 )}
+
+
                 
                 {/* Current Weather */}
                 <motion.div
@@ -261,7 +338,12 @@ function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6, duration: 0.5 }}
                 >
-                  <Weather data={weatherData} />
+                  <Weather 
+                    data={weatherData} 
+                    lastUpdate={lastUpdate}
+                    onManualRefresh={handleManualRefresh}
+                    loading={loading}
+                  />
                 </motion.div>
                 
                 {/* Weather Details */}

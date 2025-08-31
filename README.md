@@ -76,9 +76,22 @@ const API_KEY = 'your-api-key-here';
 
 ## 📱 Available Scripts
 
+### Development
 - `npm start` - Runs the app in development mode
 - `npm test` - Launches the test runner
 - `npm run build` - Builds the app for production
+
+### Code Review & Maintenance
+- `npm run review` - Comprehensive code review (unused imports, dependencies, and interactive checks)
+- `npm run review:imports` - Remove unused imports from source files using ESLint
+- `npm run review:deps` - Check for unused dependencies in package.json
+- `npm run review:check` - Interactive dependency management (like npm review)
+- `npm run review:check-interactive` - Interactive mode for dependency updates
+- `npm run clean:imports` - Clean up unused imports (same as review:imports)
+- `npm run check:imports` - Check for unused imports without removing them
+- `npm run check:deps` - Check dependencies in JSON format
+- `npm run lint` - Run ESLint to check code quality
+- `npm run lint:fix` - Run ESLint and automatically fix issues
 
 ## 🎨 Key Features
 

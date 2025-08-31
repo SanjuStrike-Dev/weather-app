@@ -3,11 +3,19 @@ import { motion } from 'framer-motion';
 import { WiSunrise, WiSunset, WiHumidity, WiStrongWind, WiBarometer } from 'react-icons/wi';
 import { format, parseISO } from 'date-fns';
 
+// Utility function to convert UTC time to location's local time
+const getLocalTimeFromUTC = (utcTimestamp, timezoneOffset) => {
+  if (!timezoneOffset) return new Date(utcTimestamp * 1000);
+  const utcTime = new Date(utcTimestamp * 1000);
+  const localTime = new Date(utcTime.getTime() + (timezoneOffset * 1000));
+  return localTime;
+};
+
 function WeatherDetails({ data, forecastData }) {
   if (!data) return null;
 
-  const sunrise = new Date(data.sys.sunrise * 1000);
-  const sunset = new Date(data.sys.sunset * 1000);
+  const sunrise = getLocalTimeFromUTC(data.sys.sunrise, data.timezone);
+  const sunset = getLocalTimeFromUTC(data.sys.sunset, data.timezone);
   const humidity = data.main.humidity;
   const windSpeed = Math.round(data.wind?.speed * 3.6);
   const windDeg = data.wind?.deg;
@@ -50,7 +58,11 @@ function WeatherDetails({ data, forecastData }) {
     
     // Group forecast data by day
     const dailyForecasts = forecastData.list.reduce((acc, item) => {
-      const date = format(parseISO(item.dt_txt), 'yyyy-MM-dd');
+      // Use timezone-adjusted date if available
+      const itemDate = forecastData.city?.timezone 
+        ? getLocalTimeFromUTC(item.dt, forecastData.city.timezone)
+        : parseISO(item.dt_txt);
+      const date = format(itemDate, 'yyyy-MM-dd');
       if (!acc[date]) {
         acc[date] = [];
       }
@@ -58,8 +70,11 @@ function WeatherDetails({ data, forecastData }) {
       return acc;
     }, {});
 
-    // Get today's data
-    const today = format(new Date(), 'yyyy-MM-dd');
+    // Get today's data using timezone-adjusted date
+    const todayInLocation = data.timezone 
+      ? getLocalTimeFromUTC(Date.now() / 1000, data.timezone)
+      : new Date();
+    const today = format(todayInLocation, 'yyyy-MM-dd');
     return dailyForecasts[today] || [];
   };
 
@@ -168,7 +183,11 @@ function WeatherDetails({ data, forecastData }) {
           <h4 className="hourly-title">Today's Hourly Forecast</h4>
           <div className="hourly-scroll">
             {todayHourlyData.map((item, index) => {
-              const hour = new Date(item.dt_txt).getHours();
+              // Use timezone-adjusted time if available
+              const itemTime = forecastData.city?.timezone 
+                ? getLocalTimeFromUTC(item.dt, forecastData.city.timezone)
+                : parseISO(item.dt_txt);
+              const hour = itemTime.getHours();
               
               // Get time-appropriate icon based on hour
               const getTimeIcon = (hour) => {
@@ -193,7 +212,7 @@ function WeatherDetails({ data, forecastData }) {
                   transition={{ delay: index * 0.05 }}
                 >
                   <div className="hour-time">
-                    {format(parseISO(item.dt_txt), 'h:mm a')}
+                    {format(itemTime, 'h:mm a')}
                   </div>
                   <div className="hour-icon">
                     {getTimeIcon(hour)}
@@ -219,11 +238,13 @@ function WeatherDetails({ data, forecastData }) {
               );
             })}
           </div>
-          <div className="hourly-note">
-            *Hourly forecast data available subject to the availability
-          </div>
         </motion.div>
       )}
+
+      {/* Hourly Forecast Note - Always Visible */}
+      <div className={`hourly-note ${todayHourlyData.length === 0 ? 'no-data' : ''}`}>
+        *Hourly forecast data available subject to the availability
+      </div>
     </motion.div>
   );
 }
